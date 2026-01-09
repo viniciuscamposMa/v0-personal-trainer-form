@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
         const logoBase64 = logoImage.toString("base64")
         console.log("[v0] Logo converted to base64")
 
-        const logoWidth = 80
-        const logoHeight = 60
-        const logoX = (pageWidth - logoWidth) / 2
-        const logoY = (pageHeight - logoHeight) / 2
+        const logoWidth = pageWidth
+        const logoHeight = pageHeight
+        const logoX = 0
+        const logoY = 0
 
         pdf.setGState(new pdf.GState({ opacity: 0.7 }))
         pdf.addImage(logoBase64, "PNG", logoX, logoY, logoWidth, logoHeight)
