@@ -19,13 +19,23 @@ export async function POST(request: NextRequest) {
         const logoBase64 = logoImage.toString("base64")
         console.log("[v0] Logo converted to base64")
 
-        const logoWidth = pageWidth
-        const logoHeight = pageHeight
-        const logoX = 0
-        const logoY = 0
+        // Assume a 16:9 aspect ratio for the logo, as a common default for logos.
+        // If the user wants a specific aspect ratio, they can provide it.
+        const assumedImageAspectRatio = 16 / 9; // Width / Height
+
+        let newWidth = pageWidth;
+        let newHeight = newWidth / assumedImageAspectRatio;
+
+        if (newHeight > pageHeight) {
+          newHeight = pageHeight;
+          newWidth = newHeight * assumedImageAspectRatio;
+        }
+
+        const logoX = (pageWidth - newWidth) / 2;
+        const logoY = (pageHeight - newHeight) / 2;
 
         pdf.setGState(new pdf.GState({ opacity: 0.7 }))
-        pdf.addImage(logoBase64, "PNG", logoX, logoY, logoWidth, logoHeight)
+        pdf.addImage(logoBase64, "PNG", logoX, logoY, newWidth, newHeight)
         pdf.setGState(new pdf.GState({ opacity: 1 }))
         console.log("[v0] Logo watermark added successfully")
       } catch (error) {
