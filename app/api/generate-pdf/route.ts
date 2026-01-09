@@ -1,253 +1,293 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { jsPDF } from "jspdf"
 import fs from "fs"
 import path from "path"
+import sharp from "sharp"
 
 export async function POST(request: NextRequest) {
   try {
     const { formData, imageUrl } = await request.json()
 
-    const pdf = new jsPDF()
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    })
+
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
 
-    const addLogoWatermark = () => {
-      try {
-        const logoPath = path.join(process.cwd(), "public", "images", "logo-clifton-personal-perfil-removebg-preview.png")
-        console.log("[v0] Reading logo from:", logoPath)
-        const logoImage = fs.readFileSync(logoPath)
-        const logoBase64 = logoImage.toString("base64")
-        console.log("[v0] Logo converted to base64")
+    // ================================
+    // BACKGROUND PROPORCIONAL
+    // ================================
+    const addBackground = async () => {
+      const imagePath = path.join(
+        process.cwd(),
+        "public",
+        "images",
+        "logo-clifton-personal-perfil-removebg-preview.png"
+      )
 
-        // Assume a 16:9 aspect ratio for the logo, as a common default for logos.
-        // If the user wants a specific aspect ratio, they can provide it.
-        const assumedImageAspectRatio = 16 / 9; // Width / Height
+      const buffer = fs.readFileSync(imagePath)
+      const meta = await sharp(buffer).metadata()
 
-        let newWidth = pageWidth;
-        let newHeight = newWidth / assumedImageAspectRatio;
+      if (!meta.width || !meta.height) return
 
-        if (newHeight > pageHeight) {
-          newHeight = pageHeight;
-          newWidth = newHeight * assumedImageAspectRatio;
-        }
+      const imgRatio = meta.width / meta.height
+      const pageRatio = pageWidth / pageHeight
 
-        const logoX = (pageWidth - newWidth) / 2;
-        const logoY = (pageHeight - newHeight) / 2;
+      let w: number
+      let h: number
 
-        pdf.setGState(new pdf.GState({ opacity: 0.7 }))
-        pdf.addImage(logoBase64, "PNG", logoX, logoY, newWidth, newHeight)
-        pdf.setGState(new pdf.GState({ opacity: 1 }))
-        console.log("[v0] Logo watermark added successfully")
-      } catch (error) {
-        console.error("[v0] Error adding logo:", error)
+      if (imgRatio > pageRatio) {
+        h = pageHeight
+        w = h * imgRatio
+      } else {
+        w = pageWidth
+        h = w / imgRatio
+      }
+
+      const x = (pageWidth - w) / 2
+      const y = (pageHeight - h) / 2
+
+      pdf.setGState(new pdf.GState({ opacity: 0.12 }))
+      pdf.addImage(buffer.toString("base64"), "PNG", x, y, w, h)
+      pdf.setGState(new pdf.GState({ opacity: 1 }))
+    }
+
+    const checkPageBreak = async () => {
+      if (y > pageHeight - 30) {
+        pdf.addPage()
+        await addBackground()
+        y = 20
       }
     }
 
-    addLogoWatermark()
+    // PRIMEIRA PÁGINA
+    await addBackground()
+    let y = 20
 
-    let yPosition = 20
-
+    pdf.setFont("helvetica", "bold")
     pdf.setFontSize(16)
-    pdf.setFont("helvetica", "bold")
-    pdf.text("FICHA DE ANAMNESE - CONSULTORIA ONLINE", pageWidth / 2, yPosition, { align: "center" })
-    yPosition += 12
+    pdf.text("FICHA DE ANAMNESE - CONSULTORIA ONLINE", pageWidth / 2, y, { align: "center" })
+    y += 12
 
-    // Section 1: Identification
+    // ================================
+    // 1. IDENTIFICAÇÃO
+    // ================================
     pdf.setFontSize(11)
-    pdf.setFont("helvetica", "bold")
-    pdf.text("1. IDENTIFICAÇÃO E BIOMETRIA", 15, yPosition)
-    yPosition += 7
+    pdf.text("1. IDENTIFICAÇÃO E BIOMETRIA", 15, y)
+    y += 7
 
     pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
 
-    const idade = formData.idade || "N/A"
-    pdf.text(`Nome: ${formData.nomeCompleto}`, 15, yPosition)
-    yPosition += 5
+    pdf.text(`Nome: ${formData.nomeCompleto}`, 15, y)
+    y += 5
+
     pdf.text(
-      `Data de Nascimento: ${formData.dataNascimento}    Idade: ${idade} anos    Sexo: ${formData.sexo}`,
+      `Data Nascimento: ${formData.dataNascimento}   Idade: ${formData.idade || "N/A"}   Sexo: ${formData.sexo}`,
       15,
-      yPosition,
+      y
     )
-    yPosition += 5
+    y += 5
 
     let imc = "0.00"
     if (formData.pesoAtual && formData.altura) {
-      const peso = Number.parseFloat(formData.pesoAtual)
-      const alturaM = Number.parseFloat(formData.altura)
-      if (!isNaN(peso) && !isNaN(alturaM) && alturaM > 0) {
-        imc = (peso / (alturaM * alturaM)).toFixed(2)
-      }
+      const p = parseFloat(formData.pesoAtual)
+      const a = parseFloat(formData.altura)
+      if (a > 0) imc = (p / (a * a)).toFixed(2)
     }
 
-    pdf.text(`Peso: ${formData.pesoAtual} kg    Altura: ${formData.altura} m    IMC: ${imc}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Profissão: ${formData.profissao}    Cidade/UF: ${formData.cidadeUf}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`WhatsApp: ${formData.whatsapp}`, 15, yPosition)
-    yPosition += 8
+    pdf.text(`Peso: ${formData.pesoAtual}kg   Altura: ${formData.altura}m   IMC: ${imc}`, 15, y)
+    y += 5
 
-    // Section 2: Goals
-    pdf.setFontSize(11)
+    pdf.text(`Profissão: ${formData.profissao}   Cidade/UF: ${formData.cidadeUf}`, 15, y)
+    y += 5
+
+    pdf.text(`WhatsApp: ${formData.whatsapp}`, 15, y)
+    y += 8
+
+    // ================================
+    // 2. OBJETIVOS
+    // ================================
     pdf.setFont("helvetica", "bold")
-    pdf.text("2. OBJETIVOS E EXPECTATIVAS", 15, yPosition)
-    yPosition += 7
-
-    pdf.setFontSize(9)
-    pdf.setFont("helvetica", "normal")
-
-    pdf.text(`Objetivo Principal: ${formData.objetivoPrincipal}`, 15, yPosition)
-    yPosition += 5
-
-    const difficulty = formData.maiorDificuldade || "Não informado"
-    const difficultyLines = pdf.splitTextToSize(`Maior Dificuldade: ${difficulty}`, pageWidth - 30)
-    pdf.text(difficultyLines, 15, yPosition)
-    yPosition += difficultyLines.length * 5
-
-    pdf.text(`Prazo Realista: ${formData.prazoRealista}`, 15, yPosition)
-    yPosition += 8
-
-    if (yPosition > pageHeight - 60) {
-      pdf.addPage()
-      addLogoWatermark()
-      yPosition = 20
-    }
-
-    // Section 3: Physical Activity History
     pdf.setFontSize(11)
-    pdf.setFont("helvetica", "bold")
-    pdf.text("3. HISTÓRICO DE ATIVIDADE FÍSICA", 15, yPosition)
-    yPosition += 7
+    pdf.text("2. OBJETIVOS E EXPECTATIVAS", 15, y)
+    y += 7
 
-    pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
 
-    pdf.text(`Treinando Atualmente: ${formData.treinandoAtualmente}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(
-      `Vezes por Semana: ${formData.vezesSemanaTreino}    Tempo por Sessão: ${formData.tempoDisponivel}`,
-      15,
-      yPosition,
+    pdf.text(`Objetivo Principal: ${formData.objetivoPrincipal}`, 15, y)
+    y += 5
+
+    const diffLines = pdf.splitTextToSize(
+      `Maior Dificuldade: ${formData.maiorDificuldade || "Não informado"}`,
+      pageWidth - 30
     )
-    yPosition += 5
-    pdf.text(`Local de Treino: ${formData.localTreino}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Gosta de Cardio: ${formData.gostaCadiovascular}`, 15, yPosition)
-    yPosition += 8
+    pdf.text(diffLines, 15, y)
+    y += diffLines.length * 5
 
-    if (yPosition > pageHeight - 60) {
-      pdf.addPage()
-      addLogoWatermark()
-      yPosition = 20
-    }
+    pdf.text(`Prazo Realista: ${formData.prazoRealista}`, 15, y)
+    y += 8
+    await checkPageBreak()
 
-    // Section 4: Health
-    pdf.setFontSize(11)
+    // ================================
+    // 3. HISTÓRICO DE ATIVIDADE
+    // ================================
     pdf.setFont("helvetica", "bold")
-    pdf.text("4. SAÚDE, LESÕES E LIMITAÇÕES", 15, yPosition)
-    yPosition += 7
+    pdf.setFontSize(11)
+    pdf.text("3. HISTÓRICO DE ATIVIDADE FÍSICA", 15, y)
+    y += 7
 
-    pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
 
-    const historicoText =
-      formData.historicoClinico && formData.historicoClinico.length > 0
+    pdf.text(`Treinando Atualmente: ${formData.treinandoAtualmente}`, 15, y)
+    y += 5
+
+    pdf.text(
+      `Vezes/Semana: ${formData.vezesSemanaTreino}   Tempo Sessão: ${formData.tempoDisponivel}`,
+      15,
+      y
+    )
+    y += 5
+
+    pdf.text(`Local de Treino: ${formData.localTreino}`, 15, y)
+    y += 5
+
+    pdf.text(`Gosta de Cardio: ${formData.gostaCadiovascular}`, 15, y)
+    y += 8
+    await checkPageBreak()
+
+    // ================================
+    // 4. SAÚDE
+    // ================================
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(11)
+    pdf.text("4. SAÚDE, LESÕES E LIMITAÇÕES", 15, y)
+    y += 7
+
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
+
+    const historico =
+      formData.historicoClinico?.length > 0
         ? formData.historicoClinico.join(", ")
         : "Nenhum"
 
-    pdf.text(`Histórico Clínico: ${historicoText}`, 15, yPosition)
-    yPosition += 5
+    pdf.text(`Histórico Clínico: ${historico}`, 15, y)
+    y += 5
 
-    const lesoes = formData.lesoesOuDores || "Nenhuma"
-    const lesoesLines = pdf.splitTextToSize(`Lesões/Dores: ${lesoes}`, pageWidth - 30)
-    pdf.text(lesoesLines, 15, yPosition)
-    yPosition += lesoesLines.length * 5
+    const lesoesLines = pdf.splitTextToSize(
+      `Lesões/Dores: ${formData.lesoesOuDores || "Nenhuma"}`,
+      pageWidth - 30
+    )
+    pdf.text(lesoesLines, 15, y)
+    y += lesoesLines.length * 5
 
-    pdf.text(`Medicamentos: ${formData.medicamentosContinuos || "Nenhum"}`, 15, yPosition)
-    yPosition += 5
+    pdf.text(`Medicamentos: ${formData.medicamentosContinuos || "Nenhum"}`, 15, y)
+    y += 5
 
-    pdf.text(`Uso de Ergogênicos: ${formData.recursoErgogenico || "Não"}`, 15, yPosition)
-    yPosition += 8
+    pdf.text(`Uso de Ergogênicos: ${formData.recursoErgogenico || "Não"}`, 15, y)
+    y += 8
+    await checkPageBreak()
 
-    if (yPosition > pageHeight - 60) {
-      pdf.addPage()
-      addLogoWatermark()
-      yPosition = 20
-    }
-
-    // Section 5: Lifestyle
-    pdf.setFontSize(11)
+    // ================================
+    // 5. ESTILO DE VIDA
+    // ================================
     pdf.setFont("helvetica", "bold")
-    pdf.text("5. ESTILO DE VIDA E ROTINA", 15, yPosition)
-    yPosition += 7
-
-    pdf.setFontSize(9)
-    pdf.setFont("helvetica", "normal")
-
-    pdf.text(`Qualidade do Sono: ${formData.qualidadeSono}    Horas de Sono: ${formData.horasSono}h`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Nível de Estresse: ${formData.nivelEstresse}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Consumo de Álcool: ${formData.consumoAlcool}    Fumante: ${formData.fumante}`, 15, yPosition)
-    yPosition += 8
-
-    // Section 6: Nutrition
     pdf.setFontSize(11)
-    pdf.setFont("helvetica", "bold")
-    pdf.text("6. PERFIL ALIMENTAR", 15, yPosition)
-    yPosition += 7
+    pdf.text("5. ESTILO DE VIDA E ROTINA", 15, y)
+    y += 7
 
-    pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
 
     pdf.text(
-      `Refeições por Dia: ${formData.refeicoesporDia}    Consumo de Água: ${formData.consumoAgua}L`,
+      `Sono: ${formData.qualidadeSono}   Horas: ${formData.horasSono}h`,
       15,
-      yPosition,
+      y
     )
-    yPosition += 5
-    pdf.text(`Suplementação: ${formData.suplementacaoAtual || "Nenhuma"}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Alergias: ${formData.alergias || "Nenhuma"}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Alimentos que não gosta: ${formData.alimentoNaoGosta || "Nenhum"}`, 15, yPosition)
-    yPosition += 5
-    pdf.text(`Distúrbios: ${formData.disturbios || "Nenhum"}`, 15, yPosition)
-    yPosition += 10
+    y += 5
 
-    pdf.setFontSize(11)
+    pdf.text(`Nível de Estresse: ${formData.nivelEstresse}`, 15, y)
+    y += 5
+
+    pdf.text(
+      `Álcool: ${formData.consumoAlcool}   Fumante: ${formData.fumante}`,
+      15,
+      y
+    )
+    y += 8
+    await checkPageBreak()
+
+    // ================================
+    // 6. PERFIL ALIMENTAR
+    // ================================
     pdf.setFont("helvetica", "bold")
-    pdf.text("7. AVALIAÇÃO VISUAL", 15, yPosition)
-    yPosition += 7
+    pdf.setFontSize(11)
+    pdf.text("6. PERFIL ALIMENTAR", 15, y)
+    y += 7
 
-    pdf.setFontSize(9)
     pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
+
+    pdf.text(
+      `Refeições/dia: ${formData.refeicoesporDia}   Água: ${formData.consumoAgua}L`,
+      15,
+      y
+    )
+    y += 5
+
+    pdf.text(`Suplementação: ${formData.suplementacaoAtual || "Nenhuma"}`, 15, y)
+    y += 5
+
+    pdf.text(`Alergias: ${formData.alergias || "Nenhuma"}`, 15, y)
+    y += 5
+
+    pdf.text(`Alimentos que não gosta: ${formData.alimentoNaoGosta || "Nenhum"}`, 15, y)
+    y += 5
+
+    pdf.text(`Distúrbios: ${formData.disturbios || "Nenhum"}`, 15, y)
+    y += 10
+    await checkPageBreak()
+
+    // ================================
+    // 7. AVALIAÇÃO VISUAL
+    // ================================
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(11)
+    pdf.text("7. AVALIAÇÃO VISUAL", 15, y)
+    y += 7
+
+    pdf.setFont("helvetica", "normal")
+    pdf.setFontSize(9)
     pdf.setTextColor(0, 0, 255)
-    pdf.textWithLink("Clique aqui para ver a foto do aluno", 15, yPosition, { url: imageUrl })
+
+    pdf.textWithLink("Clique aqui para ver a foto do aluno", 15, y, {
+      url: imageUrl,
+    })
+
     pdf.setTextColor(0, 0, 0)
 
-    const hoje = new Date()
-    const dia = String(hoje.getDate()).padStart(2, "0")
-    const mes = String(hoje.getMonth() + 1).padStart(2, "0")
-    const ano = hoje.getFullYear()
-    const dataEmissao = `${dia}/${mes}/${ano}`
-
-    yPosition = pageHeight - 15
+    // ================================
+    // RODAPÉ
+    // ================================
     pdf.setFontSize(9)
-    pdf.setFont("helvetica", "normal")
-    pdf.text(`Data de emissão: ${dataEmissao}`, 15, yPosition)
+    pdf.text(`Data de emissão: ${new Date().toLocaleDateString("pt-BR")}`, 15, pageHeight - 15)
 
-    // Generate PDF
-    const pdfBuffer = pdf.output("arraybuffer")
+    const buffer = pdf.output("arraybuffer")
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(buffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="ficha-anamnese.pdf"',
       },
     })
   } catch (error) {
-    console.error("PDF generation error:", error)
-    return NextResponse.json({ error: "PDF generation failed" }, { status: 500 })
+    console.error("Erro ao gerar PDF:", error)
+    return NextResponse.json({ error: "Erro ao gerar PDF" }, { status: 500 })
   }
 }
