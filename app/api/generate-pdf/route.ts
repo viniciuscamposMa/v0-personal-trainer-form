@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         const logoX = (pageWidth - logoWidth) / 2
         const logoY = (pageHeight - logoHeight) / 2
 
-        pdf.setGState(new pdf.GState({ opacity: 0.15 }))
+        pdf.setGState(new pdf.GState({ opacity: 0.7 }))
         pdf.addImage(logoBase64, "PNG", logoX, logoY, logoWidth, logoHeight)
         pdf.setGState(new pdf.GState({ opacity: 1 }))
         console.log("[v0] Logo watermark added successfully")
