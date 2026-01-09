@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { jsPDF } from "jspdf"
+import fs from "fs"
+import path from "path"
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,23 +11,13 @@ export async function POST(request: NextRequest) {
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
 
-    const logoUrl = "/images/logo-clifton-personal-perfil-removebg-preview.png"
-
-    const addLogoWatermark = async () => {
+    const addLogoWatermark = () => {
       try {
-        console.log("[v0] Fetching logo from:", logoUrl)
-        const logoResponse = await fetch(logoUrl)
-
-        if (!logoResponse.ok) {
-          console.error("[v0] Logo fetch failed with status:", logoResponse.status)
-          return
-        }
-
-        const logoBlob = await logoResponse.blob()
-        console.log("[v0] Logo blob size:", logoBlob.size, "type:", logoBlob.type)
-
-        const logoBase64 = await blobToBase64(logoBlob)
-        console.log("[v0] Logo converted to base64, length:", logoBase64.length)
+        const logoPath = path.join(process.cwd(), "public", "images", "logo-clifton-personal-perfil-removebg-preview.png")
+        console.log("[v0] Reading logo from:", logoPath)
+        const logoImage = fs.readFileSync(logoPath)
+        const logoBase64 = logoImage.toString("base64")
+        console.log("[v0] Logo converted to base64")
 
         const logoWidth = 80
         const logoHeight = 60
@@ -41,7 +33,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await addLogoWatermark()
+    addLogoWatermark()
 
     let yPosition = 20
 
@@ -107,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     if (yPosition > pageHeight - 60) {
       pdf.addPage()
-      await addLogoWatermark()
+      addLogoWatermark()
       yPosition = 20
     }
 
@@ -135,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     if (yPosition > pageHeight - 60) {
       pdf.addPage()
-      await addLogoWatermark()
+      addLogoWatermark()
       yPosition = 20
     }
 
@@ -169,7 +161,7 @@ export async function POST(request: NextRequest) {
 
     if (yPosition > pageHeight - 60) {
       pdf.addPage()
-      await addLogoWatermark()
+      addLogoWatermark()
       yPosition = 20
     }
 
@@ -248,17 +240,4 @@ export async function POST(request: NextRequest) {
     console.error("PDF generation error:", error)
     return NextResponse.json({ error: "PDF generation failed" }, { status: 500 })
   }
-}
-
-// Helper function to convert blob to base64
-async function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const base64String = reader.result as string
-      resolve(base64String)
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
 }
