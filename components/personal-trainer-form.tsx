@@ -1,14 +1,31 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Upload, FileText, Loader2 } from "lucide-react"
+import {
+  FileText,
+  Loader2,
+  User,
+  RotateCcw,
+  PersonStanding,
+  View,
+} from "lucide-react"
+import { ImageUpload } from "@/components/image-upload"
+import { Progress } from "@/components/ui/progress"
+
+// Defina um tipo para o estado de cada upload de imagem
+interface ImageUploadState {
+  id: string
+  label: string
+  icon: React.ReactNode
+  file: File | null
+  uploadedUrl: string | null
+}
 
 interface FormData {
   nomeCompleto: string
@@ -85,65 +102,115 @@ export default function PersonalTrainerForm() {
     consumoAgua: "",
   })
 
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>("")
-  const [previewUrl, setPreviewUrl] = useState<string>("")
-  const [isUploading, setIsUploading] = useState(false)
+  // Estado para os 4 uploads de imagem
+  const [imageUploads, setImageUploads] = useState<ImageUploadState[]>([
+    {
+      id: "front-image",
+      label: "Foto de Frente",
+      icon: <User className="h-8 w-8" />,
+      file: null,
+      uploadedUrl: null,
+    },
+    {
+      id: "back-image",
+      label: "Foto de Costas",
+      icon: <img src="/costas.png" alt="Foto de Costas" className="h-16 w-16" />,
+      file: null,
+      uploadedUrl: null,
+    },
+    {
+      id: "side-image-1",
+      label: "Foto de Lado (Esquerdo)",
+      icon: <img src="/esquerdo.png" alt="Foto de Lado (Esquerdo)" className="h-16 w-16" />,
+      file: null,
+      uploadedUrl: null,
+    },
+    {
+      id: "side-image-2",
+      label: "Foto de Lado (Direito)",
+      icon: <img src="/direito.png" alt="Foto de Lado (Esquerdo)" className="h-14 w-14" />,
+      file: null,
+      uploadedUrl: null,
+    },
+  ])
+
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleCheckboxChange = (value: string) => {
-    setFormData((prev) => {
+    setFormData(prev => {
       const historicoClinico = prev.historicoClinico.includes(value)
-        ? prev.historicoClinico.filter((item) => item !== value)
+        ? prev.historicoClinico.filter(item => item !== value)
         : [...prev.historicoClinico, value]
       return { ...prev, historicoClinico }
     })
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // Função genérica para upload de arquivo
+  const uploadFile = async (
+    file: File,
+    onProgress: (progress: number) => void
+  ): Promise<string> => {
+    const formData = new FormData()
+    formData.append("file", file)
 
-    setUploadedFile(file)
-    const objectUrl = URL.createObjectURL(file)
-    setPreviewUrl(objectUrl)
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open("POST", "/api/upload", true)
 
-    // Upload to Vercel Blob
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
+      xhr.upload.onprogress = event => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100)
+          onProgress(percentComplete)
+        }
+      }
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      })
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const response = JSON.parse(xhr.responseText)
+          resolve(response.url)
+        } else {
+          reject(new Error(`Upload failed with status: ${xhr.status}`))
+        }
+      }
 
-      if (!response.ok) throw new Error("Upload failed")
+      xhr.onerror = () => {
+        reject(new Error("Upload failed due to a network error"))
+      }
 
-      const data = await response.json()
-      setUploadedImageUrl(data.url)
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      alert("Erro ao fazer upload da imagem. Tente novamente.")
-    } finally {
-      setIsUploading(false)
-    }
+      xhr.send(formData)
+    })
   }
 
+  // Manipulador para quando um upload de imagem é concluído
+  const handleUploadComplete = (id: string, url: string) => {
+    setImageUploads(prev =>
+      prev.map(upload => (upload.id === id ? { ...upload, uploadedUrl: url } : upload))
+    )
+  }
+
+  // Verifica se todos os uploads foram concluídos
+  const allImagesUploaded = imageUploads.every(upload => upload.uploadedUrl)
+  const uploadProgress =
+    (imageUploads.filter(u => u.uploadedUrl).length / imageUploads.length) * 100
+
   const handleGeneratePdf = async () => {
-    if (!uploadedImageUrl) {
-      alert("Por favor, faça upload da foto antes de gerar o PDF.")
+    if (!allImagesUploaded) {
+      alert("Por favor, faça o upload de todas as 4 imagens antes de gerar o PDF.")
       return
     }
 
     setIsGeneratingPdf(true)
     try {
+      // Coleta as URLs das imagens
+      const imageUrls = imageUploads.map(upload => upload.uploadedUrl)
+
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: {
@@ -151,7 +218,7 @@ export default function PersonalTrainerForm() {
         },
         body: JSON.stringify({
           formData,
-          imageUrl: uploadedImageUrl,
+          imageUrls, // Envia um array de URLs
         }),
       })
 
@@ -684,46 +751,42 @@ export default function PersonalTrainerForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-neutral-600">
-            Para o sucesso da consultoria, anexe fotos (Frente, Costas e Perfil) em traje de banho ou roupas de treino
-            curtas, com boa iluminação.
+            Para o sucesso da consultoria, anexe fotos (Frente, Costas e Perfil)
+            em traje de banho ou roupas de treino curtas, com boa iluminação.
           </p>
 
+          {uploadProgress > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm font-medium">
+                <span>Progresso do Upload</span>
+                <span>{Math.round(uploadProgress)}%</span>
+              </div>
+              <Progress value={uploadProgress} className="h-2" />
+            </div>
+          )}
+
           <div className="space-y-4">
-            <Label htmlFor="photo-upload" className="cursor-pointer">
-              <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 p-8 transition hover:border-neutral-400 hover:bg-neutral-100">
-                <div className="text-center">
-                  <Upload className="mx-auto h-12 w-12 text-neutral-400" />
-                  <p className="mt-2 text-sm font-medium text-neutral-700">Clique para fazer upload</p>
-                  <p className="mt-1 text-xs text-neutral-500">PNG, JPG até 10MB</p>
-                </div>
-              </div>
-              <Input id="photo-upload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-            </Label>
-
-            {isUploading && (
-              <div className="flex items-center justify-center gap-2 text-sm text-neutral-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Fazendo upload...
-              </div>
-            )}
-
-            {previewUrl && !isUploading && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-neutral-700">Pré-visualização:</p>
-                <img
-                  src={previewUrl || "/placeholder.svg"}
-                  alt="Preview"
-                  className="mx-auto max-h-64 rounded-lg object-contain"
-                />
-                <p className="text-center text-xs text-green-600">Upload realizado com sucesso!</p>
-              </div>
-            )}
+            {imageUploads.map(upload => (
+              <ImageUpload
+                key={upload.id}
+                id={upload.id}
+                icon={upload.icon}
+                label={upload.label}
+                onFileChange={uploadFile}
+                onUploadComplete={url => handleUploadComplete(upload.id, url)}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>
 
       <div className="flex justify-center pb-8">
-        <Button onClick={handleGeneratePdf} disabled={!uploadedImageUrl || isGeneratingPdf} size="lg" className="gap-2">
+        <Button
+          onClick={handleGeneratePdf}
+          disabled={!allImagesUploaded || isGeneratingPdf}
+          size="lg"
+          className="gap-2"
+        >
           {isGeneratingPdf ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />

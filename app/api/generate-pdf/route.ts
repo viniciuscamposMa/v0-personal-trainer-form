@@ -6,7 +6,7 @@ import sharp from "sharp"
 
 export async function POST(request: NextRequest) {
   try {
-    const { formData, imageUrl } = await request.json()
+    const { formData, imageUrls } = await request.json()
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -266,11 +266,21 @@ export async function POST(request: NextRequest) {
     pdf.setFontSize(9)
     pdf.setTextColor(0, 0, 255)
 
-    pdf.textWithLink("Clique aqui para ver a foto do aluno", 15, y, {
-      url: imageUrl,
-    })
+    if (imageUrls && imageUrls.length > 0) {
+      imageUrls.forEach((url: string, index: number) => {
+        pdf.textWithLink(`Clique aqui para ver a foto ${index + 1}`, 15, y, {
+          url: url,
+        })
+        y += 6
+        checkPageBreak()
+      })
+    } else {
+      pdf.setTextColor(150, 150, 150)
+      pdf.text("Nenhuma imagem enviada.", 15, y)
+    }
 
     pdf.setTextColor(0, 0, 0)
+
 
     // ================================
     // RODAPÉ
