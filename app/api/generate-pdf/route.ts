@@ -257,36 +257,94 @@ export async function POST(request: NextRequest) {
     // ================================
     // 7. AVALIAÇÃO VISUAL
     // ================================
+    await checkPageBreak(40) // Check if there's enough space for the title and some image height
     pdf.setFont("helvetica", "bold")
     pdf.setFontSize(11)
     pdf.text("7. AVALIAÇÃO VISUAL", 15, y)
-    y += 7
-
-    pdf.setFont("helvetica", "normal")
-    pdf.setFontSize(9)
-    pdf.setTextColor(0, 0, 255)
+    y += 5
 
     if (imageUrls && imageUrls.length > 0) {
-      imageUrls.forEach((url: string, index: number) => {
-        pdf.textWithLink(`Clique aqui para ver a foto ${index + 1}`, 15, y, {
-          url: url,
-        })
-        y += 6
-        checkPageBreak()
-      })
-    } else {
-      pdf.setTextColor(150, 150, 150)
-      pdf.text("Nenhuma imagem enviada.", 15, y)
-    }
+      const imageHeight = 30 // Fixed height for smaller images
+      let x = 15
+      const totalAvailableWidth = pageWidth - 30
+      let totalImageWidth = 0
+      const imageMetas = []
 
-    pdf.setTextColor(0, 0, 0)
+      // First pass: calculate total width to center the block
+      for (const url of imageUrls) {
+        try {
+          const response = await fetch(url)
+          if (!response.ok) continue
+          const imageBuffer = await response.arrayBuffer()
+          const imgMeta = await sharp(Buffer.from(imageBuffer)).metadata()
+          if (!imgMeta.width || !imgMeta.height) continue
+          const aspectRatio = imgMeta.width / imgMeta.height
+          const imageWidth = imageHeight * aspectRatio
+          totalImageWidth += imageWidth
+          imageMetas.push({ url, imageBuffer, imageWidth, imageHeight, aspectRatio })
+        } catch (error) {
+          console.error("Error fetching image metadata:", error)
+        }
+      }
+
+      const spacing = (imageUrls.length > 1) ? 5 : 0
+      totalImageWidth += spacing * (imageUrls.length - 1)
+      
+      // Center the image block
+      x = (pageWidth - totalImageWidth) / 2
+
+      if (y + imageHeight + 20 > pageHeight - 15) {
+         pdf.addPage()
+         await addBackground()
+         y = 20
+      }
+
+      for (const meta of imageMetas) {
+        const { url, imageBuffer, imageWidth, imageHeight } = meta;
+        const imageBase64 = Buffer.from(imageBuffer).toString("base64")
+
+        pdf.addImage(imageBase64, "PNG", x, y, imageWidth, imageHeight)
+
+        const buttonY = y + imageHeight + 3
+        const buttonWidth = 20
+        const buttonHeight = 6
+
+        // Button
+        pdf.setFillColor(0, 0, 0)
+        pdf.roundedRect(x + (imageWidth - buttonWidth) / 2, buttonY, buttonWidth, buttonHeight, 2, 2, "F")
+        
+        // Button text
+        pdf.setFont("helvetica", "bold")
+        pdf.setFontSize(8)
+        pdf.setTextColor(255, 255, 255)
+        pdf.text("Abrir", x + imageWidth / 2, buttonY + 4, { align: "center" })
+
+        // Invisible link over the button
+        pdf.link(x + (imageWidth - buttonWidth) / 2, buttonY, buttonWidth, buttonHeight, { url })
+
+        pdf.setTextColor(0, 0, 0)
+
+        x += imageWidth + spacing
+      }
+      y += imageHeight + 20
+    } else {
+      pdf.setFont("helvetica", "normal")
+      pdf.setFontSize(9)
+      pdf.text("Nenhuma imagem enviada.", 15, y)
+      y += 10
+    }
 
 
     // ================================
     // RODAPÉ
     // ================================
-    pdf.setFontSize(9)
-    pdf.text(`Data de emissão: ${new Date().toLocaleDateString("pt-BR")}`, 15, pageHeight - 15)
+    const pageCount = pdf.internal.pages.length
+    for (let i = 1; i <= pageCount; i++) {
+      pdf.setPage(i)
+      pdf.setFontSize(9)
+      pdf.text(`Página ${i} de ${pageCount}`, pageWidth - 25, pageHeight - 15)
+      pdf.text(`Data de emissão: ${new Date().toLocaleDateString("pt-BR")}`, 15, pageHeight - 15)
+    }
 
     const buffer = pdf.output("arraybuffer")
 

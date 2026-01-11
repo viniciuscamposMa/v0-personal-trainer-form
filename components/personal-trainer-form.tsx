@@ -120,15 +120,15 @@ export default function PersonalTrainerForm() {
     },
     {
       id: "side-image-1",
-      label: "Foto de Lado (Esquerdo)",
+      label: "Foto de Lado (Esquerdo com braço elevado)",
       icon: <img src="/esquerdo.png" alt="Foto de Lado (Esquerdo)" className="h-16 w-16" />,
       file: null,
       uploadedUrl: null,
     },
     {
       id: "side-image-2",
-      label: "Foto de Lado (Direito)",
-      icon: <img src="/direito.png" alt="Foto de Lado (Esquerdo)" className="h-14 w-14" />,
+      label: "Foto de Lado (Direito com braços elevados)",
+      icon: <img src="/direito.png" alt="Foto de Lado (direito)" className="h-14 w-14" />,
       file: null,
       uploadedUrl: null,
     },
