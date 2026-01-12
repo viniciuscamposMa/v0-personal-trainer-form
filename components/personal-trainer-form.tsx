@@ -29,6 +29,8 @@ interface ImageUploadState {
 
 interface FormData {
   nomeCompleto: string
+  cpf: string
+  email: string
   dataNascimento: string
   idade: string
   sexo: string
@@ -67,6 +69,8 @@ interface FormData {
 export default function PersonalTrainerForm() {
   const [formData, setFormData] = useState<FormData>({
     nomeCompleto: "",
+    cpf: "",
+    email: "",
     dataNascimento: "",
     idade: "",
     sexo: "",
@@ -140,7 +144,18 @@ export default function PersonalTrainerForm() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    let formattedValue = value
+
+    if (name === "cpf") {
+      formattedValue = value
+        .replace(/\D/g, "") // Remove tudo o que não é dígito
+        .replace(/(\d{3})(\d)/, "$1.$2") // Coloca um ponto entre o terceiro e o quarto dígitos
+        .replace(/(\d{3})(\d)/, "$1.$2") // Coloca um ponto entre o terceiro e o quarto dígitos de novo (para o segundo bloco de números)
+        .replace(/(\d{3})(\d{1,2})/, "$1-$2") // Coloca um hífen entre o terceiro e o quarto dígitos
+        .replace(/(-\d{2})\d+?$/, "$1") // Impede entrar mais de 2 dígitos após o hífen
+    }
+
+    setFormData(prev => ({ ...prev, [name]: formattedValue }))
   }
 
   const handleCheckboxChange = (value: string) => {
@@ -248,11 +263,11 @@ export default function PersonalTrainerForm() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="nomeCompleto">Nome Completo</Label>
+              <Label htmlFor="nomeCompleto" className="mb-1">Nome Completo</Label>
               <Input id="nomeCompleto" name="nomeCompleto" value={formData.nomeCompleto} onChange={handleInputChange} />
             </div>
             <div>
-              <Label htmlFor="dataNascimento">Data de Nascimento</Label>
+              <Label htmlFor="dataNascimento" className="mb-1">Data de Nascimento</Label>
               <Input
                 id="dataNascimento"
                 name="dataNascimento"
@@ -263,13 +278,38 @@ export default function PersonalTrainerForm() {
             </div>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="cpf" className="mb-1">CPF</Label>
+              <Input
+                id="cpf"
+                name="cpf"
+                value={formData.cpf}
+                onChange={handleInputChange}
+                placeholder="000.000.000-00"
+                maxLength={14}
+              />
+            </div>
+            <div>
+              <Label htmlFor="email" className="mb-1">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="exemplo@email.com"
+              />
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-3">
             <div>
-              <Label htmlFor="idade">Idade</Label>
+              <Label htmlFor="idade" className="mb-1">Idade</Label>
               <Input id="idade" name="idade" type="number" value={formData.idade} onChange={handleInputChange} />
             </div>
             <div>
-              <Label>Sexo</Label>
+              <Label className="mb-1">Sexo</Label>
               <div className="flex gap-4 pt-2">
                 <label className="flex items-center gap-2">
                   <input
@@ -299,7 +339,7 @@ export default function PersonalTrainerForm() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="pesoAtual">Peso Atual (kg)</Label>
+              <Label htmlFor="pesoAtual" className="mb-1">Peso Atual (kg)</Label>
               <Input
                 id="pesoAtual"
                 name="pesoAtual"
@@ -310,7 +350,7 @@ export default function PersonalTrainerForm() {
               />
             </div>
             <div>
-              <Label htmlFor="altura">Altura (m)</Label>
+              <Label htmlFor="altura" className="mb-1">Altura (m)</Label>
               <Input
                 id="altura"
                 name="altura"
@@ -324,17 +364,17 @@ export default function PersonalTrainerForm() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="profissao">Profissão</Label>
+              <Label htmlFor="profissao" className="mb-1">Profissão</Label>
               <Input id="profissao" name="profissao" value={formData.profissao} onChange={handleInputChange} />
             </div>
             <div>
-              <Label htmlFor="cidadeUf">Cidade/UF</Label>
+              <Label htmlFor="cidadeUf" className="mb-1">Cidade/UF</Label>
               <Input id="cidadeUf" name="cidadeUf" value={formData.cidadeUf} onChange={handleInputChange} />
             </div>
           </div>
 
           <div>
-            <Label htmlFor="whatsapp">WhatsApp</Label>
+            <Label htmlFor="whatsapp" className="mb-1">WhatsApp</Label>
             <Input
               id="whatsapp"
               name="whatsapp"
@@ -353,7 +393,7 @@ export default function PersonalTrainerForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Qual seu objetivo principal hoje?</Label>
+            <Label className="mb-1">Qual seu objetivo principal hoje?</Label>
             <div className="grid gap-2 pt-2 sm:grid-cols-2">
               {["Emagrecimento", "Ganho de Massa", "Definição", "Performance Esportiva"].map((obj) => (
                 <label key={obj} className="flex items-center gap-2">
@@ -372,7 +412,7 @@ export default function PersonalTrainerForm() {
           </div>
 
           <div>
-            <Label htmlFor="maiorDificuldade">Qual sua maior dificuldade atual para atingir esse objetivo?</Label>
+            <Label htmlFor="maiorDificuldade" className="mb-1">Qual sua maior dificuldade atual para atingir esse objetivo?</Label>
             <Textarea
               id="maiorDificuldade"
               name="maiorDificuldade"
@@ -383,7 +423,7 @@ export default function PersonalTrainerForm() {
           </div>
 
           <div>
-            <Label htmlFor="prazoRealista">Qual prazo você considera realista para ver as primeiras mudanças?</Label>
+            <Label htmlFor="prazoRealista" className="mb-1">Qual prazo você considera realista para ver as primeiras mudanças?</Label>
             <Input
               id="prazoRealista"
               name="prazoRealista"
