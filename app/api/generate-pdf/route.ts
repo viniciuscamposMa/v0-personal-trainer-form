@@ -84,6 +84,10 @@ export async function POST(request: NextRequest) {
 
     pdf.text(`Nome: ${formData.nomeCompleto}`, 15, y)
     y += 5
+    pdf.text(`CPF: ${formData.cpf}`, 15, y)
+    y += 5
+    pdf.text(`Email: ${formData.email}`, 15, y)
+    y += 5
 
     pdf.text(
       `Data Nascimento: ${formData.dataNascimento}   Idade: ${formData.idade || "N/A"}   Sexo: ${formData.sexo}`,
