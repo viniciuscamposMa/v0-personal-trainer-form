@@ -6,7 +6,7 @@ import sharp from "sharp"
 
 export async function POST(request: NextRequest) {
   try {
-    const { formData, imageUrls } = await request.json()
+    const { formData, imageUrls, examUrls } = await request.json()
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -338,6 +338,99 @@ export async function POST(request: NextRequest) {
       y += 10
     }
 
+
+    // ================================
+    // 8. EXAMES LABORATORIAIS
+    // ================================
+    await checkPageBreak()
+    pdf.setFont("helvetica", "bold")
+    pdf.setFontSize(11)
+    pdf.text("8. EXAMES LABORATORIAIS", 15, y)
+    y += 7
+
+    if (examUrls && examUrls.length > 0) {
+      const cols = 2
+      const colSpacing = 8
+      const maxCellHeight = 100
+      const availableWidth = pageWidth - 30
+      const cellWidth = (availableWidth - colSpacing * (cols - 1)) / cols
+      const btnH = 7
+      const btnW = 24
+
+      // Fetch all images and pre-calculate contain-fit dimensions
+      const metas: Array<{ url: string; imageBase64: string; imgW: number; imgH: number }> = []
+
+      for (const url of examUrls) {
+        try {
+          const response = await fetch(url)
+          if (!response.ok) continue
+          const imageBuffer = await response.arrayBuffer()
+          const imgMeta = await sharp(Buffer.from(imageBuffer)).metadata()
+          if (!imgMeta.width || !imgMeta.height) continue
+
+          const aspectRatio = imgMeta.width / imgMeta.height
+
+          // Contain-fit: fit within cellWidth x maxCellHeight preserving ratio
+          let imgW = cellWidth
+          let imgH = imgW / aspectRatio
+          if (imgH > maxCellHeight) {
+            imgH = maxCellHeight
+            imgW = imgH * aspectRatio
+          }
+
+          metas.push({ url, imageBase64: Buffer.from(imageBuffer).toString("base64"), imgW, imgH })
+        } catch (err) {
+          console.error("Error fetching exam image:", err)
+        }
+      }
+
+      // Render in rows of 2 (side-by-side)
+      for (let i = 0; i < metas.length; i += cols) {
+        const row = metas.slice(i, i + cols)
+        const rowImgH = Math.max(...row.map(m => m.imgH))
+        const rowTotalH = rowImgH + 5 + btnH + 8 // image + gap + button + margin
+
+        // Page break before the entire row if needed
+        if (y + rowTotalH > pageHeight - 20) {
+          pdf.addPage()
+          await addBackground()
+          y = 20
+        }
+
+        for (let colIdx = 0; colIdx < row.length; colIdx++) {
+          const meta = row[colIdx]
+          const cellX = 15 + colIdx * (cellWidth + colSpacing)
+
+          // Center image within cell (horizontally and vertically)
+          const imgX = cellX + (cellWidth - meta.imgW) / 2
+          const imgY = y + (rowImgH - meta.imgH) / 2
+
+          pdf.addImage(meta.imageBase64, "PNG", imgX, imgY, meta.imgW, meta.imgH)
+
+          // "Abrir" button centered below each cell
+          const btnX = cellX + (cellWidth - btnW) / 2
+          const btnY = y + rowImgH + 5
+
+          pdf.setFillColor(30, 100, 200)
+          pdf.roundedRect(btnX, btnY, btnW, btnH, 2, 2, "F")
+          pdf.setFont("helvetica", "bold")
+          pdf.setFontSize(8)
+          pdf.setTextColor(255, 255, 255)
+          pdf.text("Abrir", btnX + btnW / 2, btnY + 4.8, { align: "center" })
+          pdf.link(btnX, btnY, btnW, btnH, { url: meta.url })
+          pdf.setTextColor(0, 0, 0)
+        }
+
+        y += rowTotalH
+      }
+
+      y += 5
+    } else {
+      pdf.setFont("helvetica", "normal")
+      pdf.setFontSize(9)
+      pdf.text("Nenhum exame laboratorial anexado.", 15, y)
+      y += 10
+    }
 
     // ================================
     // RODAPÉ

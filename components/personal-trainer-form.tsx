@@ -16,6 +16,7 @@ import {
   View,
 } from "lucide-react"
 import { ImageUpload } from "@/components/image-upload"
+import { ExamUpload } from "@/components/exam-upload"
 import { Progress } from "@/components/ui/progress"
 
 // Defina um tipo para o estado de cada upload de imagem
@@ -139,6 +140,7 @@ export default function PersonalTrainerForm() {
   ])
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const [examUrls, setExamUrls] = useState<string[]>([])
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -234,6 +236,7 @@ export default function PersonalTrainerForm() {
         body: JSON.stringify({
           formData,
           imageUrls, // Envia um array de URLs
+          examUrls,  // URLs dos exames laboratoriais
         }),
       })
 
@@ -817,6 +820,23 @@ export default function PersonalTrainerForm() {
               />
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>8. EXAMES LABORATORIAIS (Opcional)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-neutral-600">
+            Anexe aqui fotos ou PDFs de exames laboratoriais recentes (hemograma, perfil lipídico,
+            glicemia, hormônios, etc.) para que o personal trainer possa personalizar melhor seu
+            plano. Este campo é opcional.
+          </p>
+          <ExamUpload
+            uploadFile={uploadFile}
+            onUploadComplete={(urls) => setExamUrls(urls)}
+          />
         </CardContent>
       </Card>
 
